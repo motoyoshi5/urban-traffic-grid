@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Detailed Train Priority City</title>
+<style>
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #02050a;
+}
+canvas {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+.label {
+  position: fixed;
+  bottom: 20px;
+  width: 100%;
+  text-align: center;
+  color: rgba(255,255,255,.65);
+  font: 14px system-ui;
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="label">train priority city / detailed version</div>
+
+<script>
+const canvas = document.getElementById("c");
+const ctx = canvas.getContext("2d");
+
+let trains = [];
+let cars = [];
+let lights = [];
+let grid = 90;
+let time = 0;
+
+function resize() {
+  canvas.width = innerWidth * devicePixelRatio;
+  canvas.height = innerHeight * devicePixelRatio;
+  canvas.style.width = innerWidth + "px";
+  canvas.style.height = innerHeight + "px";
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+
+  trains = [];
+  cars = [];
+  lights = [];
+
+  for (let i = 0; i < 10; i++) trains.push(createTrain());
+  for (let i = 0; i < 30; i++) cars.push(createCar());
+
+  for (let x = grid; x < innerWidth; x += grid * 2) {
+    for (let y = grid; y < innerHeight; y += grid * 2) {
+      lights.push({
+        x,
+        y,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+  }
+}
+
+function snap(v) {
+  return Math.floor(v / grid) * grid;
+}
+
+function createTrain() {
+  return {
+    x: snap(Math.random() * innerWidth),
+    y: snap(Math.random() * innerHeight),
+    horizontal: Math.random() > 0.5,
+    dir: Math.random() > 0.5 ? 1 : -1,
+    speed: 1.1,
+    hue: Math.random() * 360,
+    cars: 2 + Math.floor(Math.random() * 3)
+  };
+}
+
+function createCar() {
+  return {
+    x: snap(Math.random() * innerWidth),
+    y: snap(Math.random() * innerHeight) + grid / 2,
+    horizontal: Math.random() > 0.5,
+    dir: Math.random() > 0.5 ? 1 : -1,
+    speed: 1.5 + Math.random() * 0.7,
+    hue: Math.random() * 360,
+    size: 0.78 + Math.random() * 0.28,
+    stop: false
+  };
+}
+
+function drawBackground() {
+  ctx.fillStyle = "rgba(2,5,10,0.18)";
+  ctx.fillRect(0, 0, innerWidth, innerHeight);
+
+  // 道路
+  ctx.strokeStyle = "rgba(100,130,160,0.25)";
+  ctx.lineWidth = 18;
+
+  for (let x = grid / 2; x < innerWidth; x += grid) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, innerHeight);
+    ctx.stroke();
+  }
+
+  for (let y = grid / 2; y < innerHeight; y += grid) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(innerWidth, y);
+    ctx.stroke();
+  }
+
+  // 道路の中央線
+  ctx.strokeStyle = "rgba(255,255,255,0.08)";
+  ctx.lineWidth = 1;
+
+  for (let x = grid / 2; x < innerWidth; x += grid) {
+    ctx.beginPath();
+    ctx.setLineDash([8, 10]);
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, innerHeight);
+    ctx.stroke();
+  }
+
+  for (let y = grid / 2; y < innerHeight; y += grid) {
+    ctx.beginPath();
+    ctx.setLineDash([8, 10]);
+    ctx.moveTo(0, y);
+    ctx.lineTo(innerWidth, y);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  // 線路
+  ctx.strokeStyle = "rgba(130,210,255,0.22)";
+  ctx.lineWidth = 3;
+
+  for (let x = 0; x < innerWidth; x += grid) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, innerHeight);
+    ctx.stroke();
+  }
+
+  for (let y = 0; y < innerHeight; y += grid) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(innerWidth, y);
+    ctx.stroke();
+  }
+
+  // 線路の枕木
+  ctx.strokeStyle = "rgba(170,230,255,0.08)";
+  ctx.lineWidth = 1;
+
+  for (let x = 0; x < innerWidth; x += grid) {
+    for (let y = 0; y < innerHeight; y += 18) {
+      ctx.beginPath();
+      ctx.moveTo(x - 8, y);
+      ctx.lineTo(x + 8, y);
+      ctx.stroke();
+    }
+  }
+
+  for (let y = 0; y < innerHeight; y += grid) {
+    for (let x = 0; x < innerWidth; x += 18) {
+      ctx.beginPath();
+      ctx.moveTo(x, y - 8);
+      ctx.lineTo(x, y + 8);
+      ctx.stroke();
+    }
+  }
+}
+
+function updateLights() {
+  for (let l of lights) l.phase += 0.02;
+}
+
+function isGreen(l, horizontal) {
+  const s = Math.sin(l.phase);
+  return horizontal ? s > 0 : s <= 0;
+}
+
+function drawLights() {
+  for (let l of lights) {
+    const greenH = isGreen(l, true);
+
+    ctx.shadowBlur = 8;
+
+    ctx.fillStyle = greenH ? "rgba(80,255,120,0.95)" : "rgba(255,80,80,0.85)";
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.beginPath();
+    ctx.arc(l.x - 8, l.y - 8, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = !greenH ? "rgba(80,255,120,0.95)" : "rgba(255,80,80,0.85)";
+    ctx.shadowColor = ctx.fillStyle;
+    ctx.beginPath();
+    ctx.arc(l.x + 8, l.y + 8, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+  }
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function orient(v) {
+  ctx.translate(v.x, v.y);
+  if (!v.horizontal) ctx.rotate(Math.PI / 2);
+  if (v.dir < 0) ctx.rotate(Math.PI);
+}
+
+function moveTrain(t) {
+  if (t.horizontal) t.x += t.dir * t.speed;
+  else t.y += t.dir * t.speed;
+
+  if (t.x < -180) t.x = innerWidth + 180;
+  if (t.x > innerWidth + 180) t.x = -180;
+  if (t.y < -180) t.y = innerHeight + 180;
+  if (t.y > innerHeight + 180) t.y = -180;
+}
+
+function moveCar(c) {
+  c.stop = false;
+
+  // 信号の少し手前で止まる
+  for (let l of lights) {
+    let near = false;
+
+    if (c.horizontal) {
+      const stopX = l.x - c.dir * 22;
+      near = Math.abs(c.x - stopX) < 5 && Math.abs(c.y - l.y) < 16;
+    } else {
+      const stopY = l.y - c.dir * 22;
+      near = Math.abs(c.y - stopY) < 5 && Math.abs(c.x - l.x) < 16;
+    }
+
+    if (near && !isGreen(l, c.horizontal)) {
+      c.stop = true;
+      break;
+    }
+  }
+
+  if (!c.stop) {
+    if (c.horizontal) c.x += c.dir * c.speed;
+    else c.y += c.dir * c.speed;
+  }
+
+  if (c.x < -100) c.x = innerWidth + 100;
+  if (c.x > innerWidth + 100) c.x = -100;
+  if (c.y < -100) c.y = innerHeight + 100;
+  if (c.y > innerHeight + 100) c.y = -100;
+}
+
+function drawTrain(t) {
+  ctx.save();
+  orient(t);
+
+  ctx.shadowBlur = 16;
+  ctx.shadowColor = `hsla(${t.hue},100%,70%,0.75)`;
+
+  const carW = 46;
+  const carH = 18;
+  const gap = 6;
+  const totalW = t.cars * carW + (t.cars - 1) * gap;
+  const startX = -totalW / 2;
+
+  // ヘッドライトビーム
+  const beam = ctx.createLinearGradient(totalW / 2, 0, totalW / 2 + 70, 0);
+  beam.addColorStop(0, "rgba(255,245,180,0.28)");
+  beam.addColorStop(1, "rgba(255,245,180,0)");
+  ctx.fillStyle = beam;
+  ctx.beginPath();
+  ctx.moveTo(totalW / 2, -8);
+  ctx.lineTo(totalW / 2 + 70, -22);
+  ctx.lineTo(totalW / 2 + 70, 22);
+  ctx.lineTo(totalW / 2, 8);
+  ctx.closePath();
+  ctx.fill();
+
+  for (let i = 0; i < t.cars; i++) {
+    const x = startX + i * (carW + gap);
+
+    // 車体
+    roundRect(x, -carH / 2, carW, carH, 5);
+    ctx.fillStyle = `hsla(${t.hue},75%,55%,0.92)`;
+    ctx.fill();
+
+    // 白ライン
+    ctx.fillStyle = "rgba(255,255,255,0.65)";
+    ctx.fillRect(x + 5, -2, carW - 10, 3);
+
+    // 窓
+    ctx.fillStyle = "rgba(210,245,255,0.82)";
+    for (let w = 0; w < 4; w++) {
+      roundRect(x + 7 + w * 9, -7, 6, 5, 1.5);
+      ctx.fill();
+    }
+
+    // 車輪
+    ctx.fillStyle = "rgba(0,0,0,0.65)";
+    ctx.beginPath();
+    ctx.arc(x + 10, 10, 3, 0, Math.PI * 2);
+    ctx.arc(x + carW - 10, 10, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 連結部
+    if (i < t.cars - 1) {
+      ctx.fillStyle = "rgba(220,240,255,0.45)";
+      ctx.fillRect(x + carW, -4, gap, 8);
+    }
+  }
+
+  // ヘッドライト
+  ctx.fillStyle = "rgba(255,250,190,0.95)";
+  ctx.beginPath();
+  ctx.arc(totalW / 2 - 5, -5, 2.4, 0, Math.PI * 2);
+  ctx.arc(totalW / 2 - 5, 5, 2.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  // テールライト
+  ctx.fillStyle = "rgba(255,80,90,0.75)";
+  ctx.beginPath();
+  ctx.arc(-totalW / 2 + 5, -5, 2.2, 0, Math.PI * 2);
+  ctx.arc(-totalW / 2 + 5, 5, 2.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawCar(c) {
+  ctx.save();
+  orient(c);
+  ctx.scale(c.size, c.size);
+
+  ctx.shadowBlur = c.stop ? 4 : 10;
+  ctx.shadowColor = c.stop
+    ? "rgba(180,180,180,0.4)"
+    : `hsla(${c.hue},100%,70%,0.7)`;
+
+  // ヘッドライトビーム
+  if (!c.stop) {
+    const beam = ctx.createLinearGradient(15, 0, 50, 0);
+    beam.addColorStop(0, "rgba(255,245,190,0.22)");
+    beam.addColorStop(1, "rgba(255,245,190,0)");
+    ctx.fillStyle = beam;
+    ctx.beginPath();
+    ctx.moveTo(13, -5);
+    ctx.lineTo(50, -15);
+    ctx.lineTo(50, 15);
+    ctx.lineTo(13, 5);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // 車体
+  roundRect(-14, -8, 28, 16, 5);
+  ctx.fillStyle = c.stop
+    ? "rgba(150,150,160,0.82)"
+    : `hsla(${c.hue},85%,60%,0.9)`;
+  ctx.fill();
+
+  // フロントガラス
+  ctx.fillStyle = "rgba(215,245,255,0.8)";
+  roundRect(1, -5, 8, 10, 2);
+  ctx.fill();
+
+  // 後部窓
+  ctx.fillStyle = "rgba(190,230,245,0.6)";
+  roundRect(-9, -5, 8, 10, 2);
+  ctx.fill();
+
+  // タイヤ
+  ctx.fillStyle = "rgba(0,0,0,0.82)";
+  ctx.fillRect(-8, -10, 5, 3);
+  ctx.fillRect(4, -10, 5, 3);
+  ctx.fillRect(-8, 7, 5, 3);
+  ctx.fillRect(4, 7, 5, 3);
+
+  // テールランプ
+  ctx.fillStyle = c.stop
+    ? "rgba(255,60,70,0.95)"
+    : "rgba(255,70,80,0.75)";
+  ctx.fillRect(-14, -5, 3, 3);
+  ctx.fillRect(-14, 2, 3, 3);
+
+  ctx.restore();
+}
+
+function animate() {
+  time += 0.016;
+
+  drawBackground();
+  updateLights();
+  drawLights();
+
+  for (const c of cars) {
+    moveCar(c);
+    drawCar(c);
+  }
+
+  for (const t of trains) {
+    moveTrain(t);
+    drawTrain(t);
+  }
+
+  requestAnimationFrame(animate);
+}
+
+addEventListener("resize", resize);
+resize();
+animate();
+</script>
+</body>
+</html>
